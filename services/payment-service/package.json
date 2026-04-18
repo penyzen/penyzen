@@ -1,0 +1,24 @@
+{
+  "name": "@penyzen/payment-service",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/handler.js",
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@penyzen/shared": "*",
+    "@penyzen/database": "*",
+    "@penyzen/lambda-router": "*",
+    "@aws-sdk/client-sqs": "^3.635.0",
+    "stripe": "^16.7.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.143",
+    "typescript": "^5.5.4",
+    "esbuild": "^0.23.0"
+  }
+}

@@ -1,0 +1,82 @@
+import * as cdk from 'aws-cdk-lib';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
+import { Construct } from 'constructs';
+
+export interface AuthStackProps extends cdk.StackProps {
+  env: 'dev' | 'prod';
+}
+
+export class AuthStack extends cdk.Stack {
+  public readonly userPool: cognito.UserPool;
+  public readonly userPoolClient: cognito.UserPoolClient;
+  public readonly userPoolId: string;
+  public readonly userPoolClientId: string;
+
+  constructor(scope: Construct, id: string, props: AuthStackProps) {
+    super(scope, id, props);
+
+    this.userPool = new cognito.UserPool(this, 'UserPool', {
+      userPoolName: `penyzen-${props.env}`,
+      selfSignUpEnabled: true,
+      signInAliases: { email: true, username: false },
+      autoVerify: { email: true },
+      standardAttributes: {
+        email: { required: true, mutable: false },
+        fullname: { required: true, mutable: true },
+      },
+      passwordPolicy: {
+        minLength: 8,
+        requireLowercase: true,
+        requireUppercase: true,
+        requireDigits: true,
+        requireSymbols: true,
+        tempPasswordValidity: cdk.Duration.days(3),
+      },
+      accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      email: cognito.UserPoolEmail.withSES({
+        sesRegion: 'us-east-1',
+        fromEmail: 'noreply@penyzen.com',
+        fromName: 'Penyzen',
+        replyTo: 'support@penyzen.com',
+      }),
+      userVerification: {
+        emailSubject: 'Verify your Penyzen account',
+        emailBody: 'Your verification code is {####}. It expires in 24 hours.',
+        emailStyle: cognito.VerificationEmailStyle.CODE,
+      },
+      deletionProtection: props.env === 'prod',
+      removalPolicy: props.env === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    });
+
+    // App client (public — no client secret, used by SPA)
+    this.userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
+      userPool: this.userPool,
+      userPoolClientName: `penyzen-web-${props.env}`,
+      authFlows: {
+        userPassword: true,
+        userSrp: true,
+        custom: false,
+        adminUserPassword: false,
+      },
+      preventUserExistenceErrors: true, // Prevents email enumeration
+      accessTokenValidity: cdk.Duration.hours(1),
+      refreshTokenValidity: cdk.Duration.days(30),
+      idTokenValidity: cdk.Duration.hours(1),
+      enableTokenRevocation: true,
+      generateSecret: false,
+    });
+
+    this.userPoolId = this.userPool.userPoolId;
+    this.userPoolClientId = this.userPoolClient.userPoolClientId;
+
+    new cdk.CfnOutput(this, 'UserPoolId', {
+      value: this.userPool.userPoolId,
+      exportName: `penyzen-user-pool-id-${props.env}`,
+    });
+
+    new cdk.CfnOutput(this, 'UserPoolClientId', {
+      value: this.userPoolClient.userPoolClientId,
+      exportName: `penyzen-user-pool-client-id-${props.env}`,
+    });
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "@penyzen/notification-service",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./dist/handler.js",
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@penyzen/shared": "*",
+    "@penyzen/email-templates": "*",
+    "@aws-sdk/client-ses": "^3.635.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.143",
+    "typescript": "^5.5.4",
+    "esbuild": "^0.23.0"
+  }
+}

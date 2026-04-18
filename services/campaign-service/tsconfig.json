@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "paths": {
+      "@penyzen/shared": ["../../packages/shared/src"],
+      "@penyzen/database": ["../../packages/database/src"],
+      "@penyzen/lambda-router": ["../../packages/lambda-router/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

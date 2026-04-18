@@ -1,0 +1,16 @@
+<h2>You received a donation!</h2>
+<p>Great news, {{organizerName}}! Your campaign just received a donation.</p>
+<p class="amount">${{amountDollars}}</p>
+<p><strong>Campaign:</strong> {{campaignTitle}}</p>
+{{#unless isAnonymous}}
+<p><strong>From:</strong> {{donorName}}</p>
+{{else}}
+<p><strong>From:</strong> Anonymous donor</p>
+{{/unless}}
+{{#if message}}
+<p><strong>Message:</strong> "{{message}}"</p>
+{{/if}}
+<p><strong>Net amount (after fees):</strong> ${{netAmountDollars}}</p>
+<a href="{{appUrl}}/dashboard/campaigns/{{campaignId}}" class="cta">View Campaign Dashboard</a>
+<hr />
+<p style="font-size:13px; color:#6b7280;">Funds are processed by Stripe and disbursed to your connected bank account on a rolling basis.</p>

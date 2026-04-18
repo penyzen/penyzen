@@ -1,0 +1,11 @@
+<h2>Your donation was successful!</h2>
+<p>Thank you for your generosity, {{donorName}}. Here's a summary of your donation:</p>
+<p class="amount">${{amountDollars}}</p>
+<p><strong>Campaign:</strong> {{campaignTitle}}</p>
+{{#if message}}
+<p><strong>Your message:</strong> "{{message}}"</p>
+{{/if}}
+<p>Your donation makes a direct impact. The organizer has been notified and will provide updates on the campaign's progress.</p>
+<a href="{{appUrl}}/campaigns/{{campaignSlug}}" class="cta">View Campaign</a>
+<hr />
+<p style="font-size:13px; color:#6b7280;">This email serves as your donation receipt. Please keep it for your records. Transaction ID: {{donationId}}</p>

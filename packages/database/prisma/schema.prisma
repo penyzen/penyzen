@@ -1,0 +1,206 @@
+// Penyzen Crowdfunding Platform — Prisma Schema
+// All monetary amounts are stored as INTEGER CENTS to avoid floating-point errors.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  // rhel-openssl-3.0.x = Amazon Linux 2023 (Lambda runtime)
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  DONOR
+  ORGANIZER
+  ADMIN
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum OrgMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum CampaignStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum CampaignCategory {
+  MEDICAL
+  EDUCATION
+  EMERGENCY
+  NONPROFIT
+  COMMUNITY
+  CREATIVE
+  OTHER
+}
+
+enum MilestoneStatus {
+  PENDING
+  REACHED
+  DISBURSED
+}
+
+enum DonationStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id                        String      @id @default(uuid())
+  cognitoId                 String      @unique
+  email                     String      @unique
+  name                      String
+  avatarUrl                 String?
+  bio                       String?
+  role                      UserRole    @default(DONOR)
+  kycStatus                 KycStatus   @default(NOT_STARTED)
+  stripeCustomerId          String?     @unique
+  stripeAccountId           String?     @unique  // Stripe Connect Express account
+  stripeIdentitySessionId   String?
+  createdAt                 DateTime    @default(now())
+  updatedAt                 DateTime    @updatedAt
+
+  organizationMemberships   OrgMember[]
+  campaigns                 Campaign[]
+  donations                 Donation[]
+
+  @@index([email])
+  @@index([cognitoId])
+}
+
+model Organization {
+  id          String      @id @default(uuid())
+  name        String
+  slug        String      @unique
+  description String?
+  logoUrl     String?
+  websiteUrl  String?
+  ein         String?     // IRS Employer Identification Number
+  isVerified  Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  members     OrgMember[]
+  campaigns   Campaign[]
+
+  @@index([slug])
+}
+
+model OrgMember {
+  id             String        @id @default(uuid())
+  userId         String
+  organizationId String
+  role           OrgMemberRole @default(MEMBER)
+  createdAt      DateTime      @default(now())
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model Campaign {
+  id                String           @id @default(uuid())
+  slug              String           @unique
+  title             String
+  description       String           // short teaser (max 500 chars)
+  story             String           @db.Text  // full rich-text story
+  category          CampaignCategory
+  status            CampaignStatus   @default(DRAFT)
+  goalAmountCents   Int              // e.g. 500000 = $5,000.00
+  raisedAmountCents Int              @default(0)
+  donorCount        Int              @default(0)
+  coverImageUrl     String?
+  videoUrl          String?
+  location          String?
+  endsAt            DateTime?
+  publishedAt       DateTime?
+  organizerId       String
+  organizationId    String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  organizer         User             @relation(fields: [organizerId], references: [id])
+  organization      Organization?    @relation(fields: [organizationId], references: [id])
+  donations         Donation[]
+  milestones        Milestone[]
+  updates           CampaignUpdate[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([organizerId])
+  @@index([slug])
+  @@index([category, status])
+}
+
+model Milestone {
+  id                String          @id @default(uuid())
+  campaignId        String
+  title             String
+  description       String?
+  targetAmountCents Int
+  status            MilestoneStatus @default(PENDING)
+  reachedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  campaign          Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+}
+
+model CampaignUpdate {
+  id         String   @id @default(uuid())
+  campaignId String
+  title      String
+  body       String   @db.Text
+  createdAt  DateTime @default(now())
+
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, createdAt(sort: Desc)])
+}
+
+model Donation {
+  id                    String         @id @default(uuid())
+  campaignId            String
+  donorId               String
+  amountCents           Int            // gross donation
+  feeCents              Int            @default(0) // platform fee
+  netAmountCents        Int            // amountCents - feeCents (what organizer receives)
+  status                DonationStatus @default(PENDING)
+  stripePaymentIntentId String?        @unique
+  stripeChargeId        String?        @unique
+  isAnonymous           Boolean        @default(false)
+  message               String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  campaign              Campaign       @relation(fields: [campaignId], references: [id])
+  donor                 User           @relation(fields: [donorId], references: [id])
+
+  @@index([campaignId, status])
+  @@index([donorId, createdAt(sort: Desc)])
+  @@index([stripePaymentIntentId])
+}
