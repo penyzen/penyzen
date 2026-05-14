@@ -8,8 +8,8 @@ datasource db {
 
 generator client {
   provider      = "prisma-client-js"
-  // rhel-openssl-3.0.x = Amazon Linux 2023 (Lambda runtime)
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  // linux-arm64-openssl-3.0.x = Amazon Linux 2023 ARM64 (Graviton Lambda runtime)
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
 }
 
 // ─── Enums ────────────────────────────────────────────────────────────────────

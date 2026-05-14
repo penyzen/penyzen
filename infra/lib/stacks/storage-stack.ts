@@ -5,7 +5,7 @@ import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Construct } from 'constructs';
 
 export interface StorageStackProps extends cdk.StackProps {
-  env: 'dev' | 'prod';
+  envName: 'dev' | 'prod';
 }
 
 export class StorageStack extends cdk.Stack {
@@ -18,7 +18,7 @@ export class StorageStack extends cdk.Stack {
 
     // Campaign media bucket (images, videos)
     this.mediaBucket = new s3.Bucket(this, 'MediaBucket', {
-      bucketName: `penyzen-media-${props.env}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `penyzen-media-${props.envName}-${cdk.Aws.ACCOUNT_ID}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
@@ -36,23 +36,23 @@ export class StorageStack extends cdk.Stack {
           abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
         },
       ],
-      removalPolicy: props.env === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: props.env !== 'prod',
+      removalPolicy: props.envName === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: props.envName !== 'prod',
     });
 
     // Tax receipts and documents bucket
     this.receiptsBucket = new s3.Bucket(this, 'ReceiptsBucket', {
-      bucketName: `penyzen-receipts-${props.env}-${cdk.Aws.ACCOUNT_ID}`,
+      bucketName: `penyzen-receipts-${props.envName}-${cdk.Aws.ACCOUNT_ID}`,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
-      removalPolicy: props.env === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-      autoDeleteObjects: props.env !== 'prod',
+      removalPolicy: props.envName === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: props.envName !== 'prod',
     });
 
     // CloudFront distribution for media bucket (Origin Access Control — OAC)
     this.distribution = new cloudfront.Distribution(this, 'MediaDistribution', {
-      comment: `penyzen-media-cdn-${props.env}`,
+      comment: `penyzen-media-cdn-${props.envName}`,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(this.mediaBucket),
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
@@ -66,12 +66,12 @@ export class StorageStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'MediaBucketName', {
       value: this.mediaBucket.bucketName,
-      exportName: `penyzen-media-bucket-${props.env}`,
+      exportName: `penyzen-media-bucket-${props.envName}`,
     });
 
     new cdk.CfnOutput(this, 'CloudFrontDomain', {
       value: `https://${this.distribution.distributionDomainName}`,
-      exportName: `penyzen-cloudfront-domain-${props.env}`,
+      exportName: `penyzen-cloudfront-domain-${props.envName}`,
     });
   }
 }

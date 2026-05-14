@@ -18,10 +18,12 @@ export interface PenyzenLambdaProps {
   vpc?: ec2.IVpc;
   vpcSubnets?: ec2.SubnetSelection;
   securityGroups?: ec2.ISecurityGroup[];
-  /** Log group retention in days, default: 30 */
-  logRetentionDays?: number;
+  /** Log group retention, default: ONE_MONTH */
+  logRetention?: logs.RetentionDays;
   /** SNS topic ARN for alarms, optional */
   alarmTopicArn?: string;
+  /** Lambda layers to attach (e.g., the Prisma layer for DB services) */
+  layers?: lambda.ILayerVersion[];
 }
 
 /**
@@ -42,7 +44,7 @@ export class PenyzenLambda extends Construct {
 
     this.logGroup = new logs.LogGroup(this, 'LogGroup', {
       logGroupName: `/aws/lambda/penyzen-${props.serviceName}-${env}`,
-      retention: logs.RetentionDays[`${props.logRetentionDays ?? 30}_DAYS` as keyof typeof logs.RetentionDays] ?? logs.RetentionDays.ONE_MONTH,
+      retention: props.logRetention ?? logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
@@ -62,6 +64,7 @@ export class PenyzenLambda extends Construct {
       vpc: props.vpc,
       vpcSubnets: props.vpcSubnets,
       securityGroups: props.securityGroups,
+      layers: props.layers,
       logGroup: this.logGroup,
       // Enable AWS Lambda SnapStart for faster cold starts (Java only currently, but future-proof)
       tracing: lambda.Tracing.ACTIVE, // AWS X-Ray
@@ -72,7 +75,7 @@ export class PenyzenLambda extends Construct {
     cdk.Tags.of(this.fn).add('Environment', env);
 
     // Error rate alarm: > 1% errors over 5-minute window
-    const errorAlarm = new cloudwatch.Alarm(this, 'ErrorAlarm', {
+    new cloudwatch.Alarm(this, 'ErrorAlarm', {
       alarmName: `penyzen-${props.serviceName}-errors-${env}`,
       metric: this.fn.metricErrors({ period: cdk.Duration.minutes(5), statistic: 'Sum' }),
       threshold: 5,

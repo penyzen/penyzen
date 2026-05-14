@@ -7,6 +7,8 @@ import { AuthStack } from '../lib/stacks/auth-stack';
 import { StorageStack } from '../lib/stacks/storage-stack';
 import { QueueStack } from '../lib/stacks/queue-stack';
 import { ApiStack } from '../lib/stacks/api-stack';
+import { MigratorStack } from '../lib/stacks/migrator-stack';
+import { WebStack } from '../lib/stacks/web-stack';
 
 const app = new cdk.App();
 
@@ -27,54 +29,52 @@ const awsEnv: cdk.Environment = { account, region };
 // ── Stack instantiation in dependency order ────────────────────────────────
 
 const networkStack = new NetworkStack(app, `PenyzenNetwork-${envName}`, {
-  env: envName as 'dev' | 'prod',
+  envName: envName as 'dev' | 'prod',
+  env: awsEnv,
   stackName: `penyzen-network-${envName}`,
   description: 'Penyzen VPC, subnets, and security groups',
-  environment: awsEnv,
   tags: { Project: 'penyzen', Environment: envName },
 });
 
 const databaseStack = new DatabaseStack(app, `PenyzenDatabase-${envName}`, {
-  env: envName as 'dev' | 'prod',
+  envName: envName as 'dev' | 'prod',
+  env: awsEnv,
   stackName: `penyzen-database-${envName}`,
   description: 'Penyzen Aurora Serverless v2 and RDS Proxy',
-  environment: awsEnv,
   vpc: networkStack.vpc,
-  rdsSg: networkStack.rdsSg,
   lambdaSg: networkStack.lambdaSg,
   tags: { Project: 'penyzen', Environment: envName },
 });
-databaseStack.addDependency(networkStack);
 
 const authStack = new AuthStack(app, `PenyzenAuth-${envName}`, {
-  env: envName as 'dev' | 'prod',
+  envName: envName as 'dev' | 'prod',
+  env: awsEnv,
   stackName: `penyzen-auth-${envName}`,
   description: 'Penyzen Cognito User Pool and App Client',
-  environment: awsEnv,
   tags: { Project: 'penyzen', Environment: envName },
 });
 
 const storageStack = new StorageStack(app, `PenyzenStorage-${envName}`, {
-  env: envName as 'dev' | 'prod',
+  envName: envName as 'dev' | 'prod',
+  env: awsEnv,
   stackName: `penyzen-storage-${envName}`,
   description: 'Penyzen S3 buckets and CloudFront CDN',
-  environment: awsEnv,
   tags: { Project: 'penyzen', Environment: envName },
 });
 
 const queueStack = new QueueStack(app, `PenyzenQueues-${envName}`, {
-  env: envName as 'dev' | 'prod',
+  envName: envName as 'dev' | 'prod',
+  env: awsEnv,
   stackName: `penyzen-queues-${envName}`,
   description: 'Penyzen SQS queues and DLQs',
-  environment: awsEnv,
   tags: { Project: 'penyzen', Environment: envName },
 });
 
 const apiStack = new ApiStack(app, `PenyzenApi-${envName}`, {
-  env: envName as 'dev' | 'prod',
+  envName: envName as 'dev' | 'prod',
+  env: awsEnv,
   stackName: `penyzen-api-${envName}`,
   description: 'Penyzen API Gateway, Lambda functions, and IAM roles',
-  environment: awsEnv,
   vpc: networkStack.vpc,
   lambdaSg: networkStack.lambdaSg,
   dbSecret: databaseStack.secret,
@@ -93,5 +93,40 @@ apiStack.addDependency(databaseStack);
 apiStack.addDependency(authStack);
 apiStack.addDependency(storageStack);
 apiStack.addDependency(queueStack);
+
+new MigratorStack(app, `PenyzenMigrator-${envName}`, {
+  envName: envName as 'dev' | 'prod',
+  env: awsEnv,
+  stackName: `penyzen-migrator-${envName}`,
+  description: 'Penyzen one-shot DB migration Lambda',
+  vpc: networkStack.vpc,
+  lambdaSg: networkStack.lambdaSg,
+  dbSecret: databaseStack.secret,
+  proxyEndpoint: databaseStack.proxyEndpoint,
+  tags: { Project: 'penyzen', Environment: envName },
+});
+
+// Web frontend (Amplify Hosting). GitHub repo + token are optional and read from CDK context:
+//   cdk deploy PenyzenWeb-dev -c github_repo=https://github.com/<user>/<repo> -c github_token=ghp_xxx
+const githubRepo = app.node.tryGetContext('github_repo') as string | undefined;
+const githubToken = app.node.tryGetContext('github_token') as string | undefined;
+
+new WebStack(app, `PenyzenWeb-${envName}`, {
+  envName: envName as 'dev' | 'prod',
+  env: awsEnv,
+  stackName: `penyzen-web-${envName}`,
+  description: 'Penyzen Next.js frontend on Amplify Hosting',
+  rootDomain: 'penyzen.com',
+  hostedZoneId: 'Z04009072KRDXZRF0HM85',
+  subdomain: envName === 'prod' ? 'www' : 'dev',
+  publicApiUrl: apiStack.api.apiEndpoint,
+  cognitoUserPoolId: authStack.userPool.userPoolId,
+  cognitoAppClientId: authStack.userPoolClient.userPoolClientId,
+  cognitoRegion: awsEnv.region!,
+  ...(githubRepo && { repositoryUrl: githubRepo }),
+  ...(githubToken && { githubAccessToken: githubToken }),
+  sourceBranch: envName === 'prod' ? 'master' : 'master',
+  tags: { Project: 'penyzen', Environment: envName },
+});
 
 app.synth();

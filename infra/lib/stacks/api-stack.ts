@@ -15,7 +15,7 @@ import { PenyzenLambda } from '../constructs/lambda-function';
 import * as path from 'path';
 
 export interface ApiStackProps extends cdk.StackProps {
-  env: 'dev' | 'prod';
+  envName: 'dev' | 'prod';
   vpc: ec2.IVpc;
   lambdaSg: ec2.ISecurityGroup;
   dbSecret: secretsmanager.ISecret;
@@ -34,16 +34,32 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const serviceRoot = path.join(__dirname, '../../../../services');
+    const serviceRoot = path.join(__dirname, '../../../services');
+
+    // Prisma client + ARM64 query engine, shared across all DB-backed services
+    const prismaLayer = new lambda.LayerVersion(this, 'PrismaLayer', {
+      layerVersionName: `penyzen-prisma-${props.envName}`,
+      code: lambda.Code.fromAsset(path.join(__dirname, '../../lambda-layers/prisma')),
+      compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
+      compatibleArchitectures: [lambda.Architecture.ARM_64],
+      description: '@prisma/client + linux-arm64-openssl-3.0.x query engine',
+    });
+
+    // Construct Prisma-compatible DATABASE_URL pointing at the RDS Proxy.
+    // Password is rotated to alphanumeric-only, so no URL-encoding needed.
+    const dbUsername = props.dbSecret.secretValueFromJson('username').unsafeUnwrap();
+    const dbPassword = props.dbSecret.secretValueFromJson('password').unsafeUnwrap();
+    const databaseUrl = `postgresql://${dbUsername}:${dbPassword}@${props.proxyEndpoint}:5432/penyzen?schema=public&sslmode=require`;
 
     // ── Shared Lambda environment ──────────────────────────────────────────
     const commonEnv = {
       NODE_ENV: 'production',
-      AWS_REGION: this.region,
       COGNITO_USER_POOL_ID: props.userPool.userPoolId,
       COGNITO_APP_CLIENT_ID: props.userPoolClient.userPoolClientId,
       COGNITO_REGION: this.region,
       DB_SECRET_ARN: props.dbSecret.secretArn,
+      DB_PROXY_ENDPOINT: props.proxyEndpoint,
+      DATABASE_URL: databaseUrl,
       SQS_NOTIFICATION_QUEUE_URL: props.notificationQueue.queueUrl,
       S3_MEDIA_BUCKET: props.mediaBucket.bucketName,
       S3_RECEIPTS_BUCKET: props.receiptsBucket.bucketName,
@@ -58,6 +74,7 @@ export class ApiStack extends cdk.Stack {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [props.lambdaSg],
+      layers: [prismaLayer],
       environment: {
         ...commonEnv,
         // Stripe secret key loaded from Secrets Manager at cold start via env — replace with
@@ -73,6 +90,7 @@ export class ApiStack extends cdk.Stack {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [props.lambdaSg],
+      layers: [prismaLayer],
       environment: commonEnv,
     });
 
@@ -82,6 +100,7 @@ export class ApiStack extends cdk.Stack {
       vpc: props.vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       securityGroups: [props.lambdaSg],
+      layers: [prismaLayer],
       environment: {
         ...commonEnv,
         STRIPE_SECRET_KEY: props.dbSecret.secretValueFromJson('STRIPE_SECRET_KEY').unsafeUnwrap(),
@@ -168,7 +187,7 @@ export class ApiStack extends cdk.Stack {
     );
 
     this.api = new apigatewayv2.HttpApi(this, 'HttpApi', {
-      apiName: `penyzen-api-${props.env}`,
+      apiName: `penyzen-api-${props.envName}`,
       description: 'Penyzen Crowdfunding Platform API',
       corsPreflight: {
         allowOrigins: ['https://www.penyzen.com', 'http://localhost:3000'],
@@ -192,7 +211,7 @@ export class ApiStack extends cdk.Stack {
 
     // ── Route registrations ────────────────────────────────────────────────
 
-    const noAuth = { authorizer: new authorizers.HttpNoneAuthorizer() };
+    const noAuth = { authorizer: new apigatewayv2.HttpNoneAuthorizer() };
 
     // Auth routes (public)
     this.api.addRoutes({ path: '/v1/auth/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: userIntegration, ...noAuth });
@@ -229,7 +248,7 @@ export class ApiStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: this.api.apiEndpoint,
-      exportName: `penyzen-api-url-${props.env}`,
+      exportName: `penyzen-api-url-${props.envName}`,
     });
   }
 }

@@ -3,22 +3,21 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
 export interface NetworkStackProps extends cdk.StackProps {
-  env: 'dev' | 'prod';
+  envName: 'dev' | 'prod';
 }
 
 export class NetworkStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly lambdaSg: ec2.SecurityGroup;
-  public readonly rdsSg: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props: NetworkStackProps) {
     super(scope, id, props);
 
     this.vpc = new ec2.Vpc(this, 'Vpc', {
-      vpcName: `penyzen-${props.env}`,
+      vpcName: `penyzen-${props.envName}`,
       maxAzs: 2,
       // Cost-optimized MVP: 1 NAT Gateway (no HA). Change to 2+ for production HA.
-      natGateways: props.env === 'prod' ? 2 : 1,
+      natGateways: props.envName === 'prod' ? 2 : 1,
       subnetConfiguration: [
         {
           name: 'public',
@@ -54,26 +53,11 @@ export class NetworkStack extends cdk.Stack {
     // Lambda security group: outbound to internet (for Stripe, Cognito) via NAT
     this.lambdaSg = new ec2.SecurityGroup(this, 'LambdaSg', {
       vpc: this.vpc,
-      securityGroupName: `penyzen-lambda-${props.env}`,
-      description: 'Lambda functions — outbound only',
+      securityGroupName: `penyzen-lambda-${props.envName}`,
+      description: 'Lambda functions - outbound only',
       allowAllOutbound: true,
     });
 
-    // RDS security group: inbound from Lambda only, no outbound
-    this.rdsSg = new ec2.SecurityGroup(this, 'RdsSg', {
-      vpc: this.vpc,
-      securityGroupName: `penyzen-rds-${props.env}`,
-      description: 'Aurora PostgreSQL — inbound from Lambda only',
-      allowAllOutbound: false,
-    });
-
-    this.rdsSg.addIngressRule(
-      this.lambdaSg,
-      ec2.Port.tcp(5432),
-      'Allow Lambda to connect to PostgreSQL',
-    );
-
-    // Outputs for cross-stack imports
-    new cdk.CfnOutput(this, 'VpcId', { value: this.vpc.vpcId, exportName: `penyzen-vpc-id-${props.env}` });
+    new cdk.CfnOutput(this, 'VpcId', { value: this.vpc.vpcId, exportName: `penyzen-vpc-id-${props.envName}` });
   }
 }

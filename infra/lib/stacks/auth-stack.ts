@@ -3,7 +3,7 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
 
 export interface AuthStackProps extends cdk.StackProps {
-  env: 'dev' | 'prod';
+  envName: 'dev' | 'prod';
 }
 
 export class AuthStack extends cdk.Stack {
@@ -16,7 +16,7 @@ export class AuthStack extends cdk.Stack {
     super(scope, id, props);
 
     this.userPool = new cognito.UserPool(this, 'UserPool', {
-      userPoolName: `penyzen-${props.env}`,
+      userPoolName: `penyzen-${props.envName}`,
       selfSignUpEnabled: true,
       signInAliases: { email: true, username: false },
       autoVerify: { email: true },
@@ -44,14 +44,14 @@ export class AuthStack extends cdk.Stack {
         emailBody: 'Your verification code is {####}. It expires in 24 hours.',
         emailStyle: cognito.VerificationEmailStyle.CODE,
       },
-      deletionProtection: props.env === 'prod',
-      removalPolicy: props.env === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+      deletionProtection: props.envName === 'prod',
+      removalPolicy: props.envName === 'prod' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
     });
 
     // App client (public — no client secret, used by SPA)
     this.userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {
       userPool: this.userPool,
-      userPoolClientName: `penyzen-web-${props.env}`,
+      userPoolClientName: `penyzen-web-${props.envName}`,
       authFlows: {
         userPassword: true,
         userSrp: true,
@@ -71,12 +71,12 @@ export class AuthStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'UserPoolId', {
       value: this.userPool.userPoolId,
-      exportName: `penyzen-user-pool-id-${props.env}`,
+      exportName: `penyzen-user-pool-id-${props.envName}`,
     });
 
     new cdk.CfnOutput(this, 'UserPoolClientId', {
       value: this.userPoolClient.userPoolClientId,
-      exportName: `penyzen-user-pool-client-id-${props.env}`,
+      exportName: `penyzen-user-pool-client-id-${props.envName}`,
     });
   }
 }

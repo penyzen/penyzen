@@ -121,9 +121,10 @@ export class Router {
   }
 
   private buildContext(event: APIGatewayProxyEventV2, pathParams: PathParams): RouterContext {
+    const requestContext = event.requestContext as unknown as Record<string, unknown>;
     const claims =
-      (event.requestContext as Record<string, unknown>).authorizer != null
-        ? ((event.requestContext as Record<string, unknown>).authorizer as { jwt?: { claims?: Record<string, string> } })?.jwt?.claims ?? null
+      requestContext.authorizer != null
+        ? (requestContext.authorizer as { jwt?: { claims?: Record<string, string> } })?.jwt?.claims ?? null
         : null;
 
     const queryParams: QueryParams = {};

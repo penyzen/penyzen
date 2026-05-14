@@ -6,9 +6,9 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc && npm run copy-templates",
-    "copy-templates": "cp -r src/templates dist/templates && cp -r src/layouts dist/layouts",
+    "copy-templates": "node -e \"const fs=require('fs'),path=require('path');for(const d of ['templates','layouts']){fs.cpSync(path.join('src',d),path.join('dist',d),{recursive:true});}\"",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
     "@penyzen/shared": "*",
