@@ -41,13 +41,13 @@ applications:
           commands:
             - npm run build
       artifacts:
-        baseDirectory: apps/web/.next
+        baseDirectory: .next
         files:
           - '**/*'
       cache:
         paths:
           - node_modules/**/*
-          - apps/web/.next/cache/**/*
+          - .next/cache/**/*
 `;
 
 export class WebStack extends cdk.Stack {
