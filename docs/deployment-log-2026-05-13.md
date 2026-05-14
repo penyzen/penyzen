@@ -460,3 +460,106 @@ Verified routes (all `200 OK`):
 3. **Manual deploys** (no Git): build locally and upload a zip via the Amplify Console's "Deploy without Git" path, or use the AWS CLI's `start-deployment` API.
 
 **Status:** WebStack is *not yet deployed* — pending decision on which source path to use.
+
+---
+
+## 10. Frontend deployment (2026-05-14, follow-up session)
+
+### 10.1 WebStack deployed via CDK
+
+`cdk deploy PenyzenWeb-dev` succeeded at 2026-05-14T05:59 UTC. Outputs:
+
+| Output | Value |
+|---|---|
+| `AmplifyAppId` | `d36f230uhjp2x3` |
+| `AmplifyDefaultDomain` | `d36f230uhjp2x3.amplifyapp.com` |
+| `CustomDomain` | `https://dev.penyzen.com` |
+
+Domain association: status `AVAILABLE`, ACM cert validated, `dev` subdomain verified, DNS `dev → d2ahhep3nf9rqv.cloudfront.net`.
+
+### 10.2 GitHub source connection via CLI (not console)
+
+Initial attempt was to connect GitHub via the Amplify Console's "Connect repository" flow, but the current console UI doesn't expose that path for CDK-created apps. Switched to CLI:
+
+```powershell
+$pat = '<github-pat-with-repo+admin:repo_hook scopes>'
+aws amplify update-app `
+  --app-id d36f230uhjp2x3 `
+  --region us-east-1 `
+  --repository https://github.com/penyzen/penyzen `
+  --access-token $pat
+```
+
+**Side effect (gotcha):** `update-app --repository` on an Amplify app wipes the existing `branches` AND the `subDomainSettings` mappings on the domain association. After the call:
+- `list-branches` returned empty
+- `get-domain-association` showed `subDomains: []`
+
+CDK CloudFormation state did not auto-reconcile (it sees no drift unless you run `detect-stack-drift`).
+
+### 10.3 Manual recreation of branch + subdomain mapping
+
+```powershell
+# Recreate the master branch
+aws amplify create-branch `
+  --app-id d36f230uhjp2x3 --region us-east-1 `
+  --branch-name master --stage DEVELOPMENT `
+  --framework "Next.js - SSR" --enable-auto-build
+
+# Reattach dev subdomain
+aws amplify update-domain-association `
+  --app-id d36f230uhjp2x3 --region us-east-1 `
+  --domain-name penyzen.com `
+  --sub-domain-settings 'prefix=dev,branchName=master'
+```
+
+This created drift between CloudFormation and reality. Future `cdk deploy PenyzenWeb-dev` calls should still be idempotent (the CDK constructs reference the same names) but watch for replace-on-update warnings.
+
+### 10.4 Build #1 failed: artifact path resolution
+
+```
+!!! CustomerError: Artifacts base directory not found in build output, please check your buildSpec
+```
+
+**Root cause:** The buildSpec used `appRoot: apps/web` with `artifacts.baseDirectory: apps/web/.next` — Amplify resolves `baseDirectory` *relative to* `appRoot`, so it was looking for `apps/web/apps/web/.next` (doesn't exist).
+
+**Fix (commit `7fd7fbd`):**
+- `amplify.yml`: `baseDirectory: apps/web/.next` → `.next`, `cache.paths: apps/web/.next/cache/**/*` → `.next/cache/**/*`
+- `infra/lib/stacks/web-stack.ts`: same edits to the inline `BUILD_SPEC` constant (CDK source of truth)
+
+### 10.5 Build #2 succeeded (auto-triggered by push)
+
+After `git push origin master`, the GitHub webhook installed by the PAT auto-triggered build #2. Completed in ~5 minutes (job duration 299s).
+
+```
+Route (app)                                Size     First Load JS
+┌ ○ /                                     189 B          94.2 kB
+├ ○ /_not-found                           873 B          88.1 kB
+├ ○ /campaigns                            189 B          94.2 kB
+├ ƒ /campaigns/[id]                       189 B          94.2 kB
+├ ○ /confirm                              3.93 kB         112 kB
+├ ƒ /dashboard                            189 B          94.2 kB
+├ ƒ /dashboard/campaigns                  189 B          94.2 kB
+├ ƒ /dashboard/campaigns/new              2.36 kB         111 kB
+├ ƒ /dashboard/profile                    138 B          87.3 kB
+├ ○ /forgot-password                      3.18 kB         118 kB
+├ ○ /login                                1.16 kB         138 kB
+└ ○ /register                             2.66 kB         139 kB
+```
+
+### 10.6 Verification
+
+| Route | Status | Notes |
+|---|---|---|
+| `https://dev.penyzen.com/` | 200 (17 KB) | Marketing home |
+| `/campaigns` | 200 (10.5 KB) | SSR — server hit `/v1/campaigns` API, rendered empty-state |
+| `/login`, `/register` | 200 | Cognito auth pages |
+| `/dashboard`, `/dashboard/campaigns/new` | 307 → `/login` | Auth guard working — no Cognito cookie, redirect issued |
+
+Full chain proven: browser → CloudFront → Amplify → Next.js SSR → Cognito (auth guard) → API Gateway → Lambda → Prisma layer → RDS Proxy → Aurora.
+
+### 10.7 Still pending
+
+- **CloudFormation drift on `PenyzenWeb-dev`**: branch + subdomain mapping recreated out-of-band. Run `aws cloudformation detect-stack-drift --stack-name penyzen-web-dev` to confirm, and decide whether to re-import or accept drift.
+- **GitHub PAT lifecycle**: token is stored on the Amplify app config (encrypted). Revoke/rotate when no longer needed.
+- **Stripe**: still placeholder. When integrating real payments, update Secrets Manager + configure the three webhook endpoints.
+- **SES**: domain identity not yet verified — notification Lambda will deploy but emails will fail to send.
