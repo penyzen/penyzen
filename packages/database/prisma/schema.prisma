@@ -64,45 +64,84 @@ enum DonationStatus {
   REFUNDED
 }
 
+// Per-campaign money-flow mode. ORGANIZER_PAYOUT is the existing,
+// unchanged Stripe Connect destination-charge flow (default, so all
+// existing campaigns and other verticals are unaffected).
+// DIRECT_TO_INSTITUTION holds funds on the platform and disburses to a
+// verified Payee (the trust wedge for the college-launch vertical).
+enum DisbursementMode {
+  ORGANIZER_PAYOUT
+  DIRECT_TO_INSTITUTION
+}
+
+enum PayeeType {
+  EDUCATION
+  MEDICAL
+  FUNERAL
+  OTHER
+}
+
+enum PayeeStatus {
+  UNVERIFIED
+  VERIFIED
+  REJECTED
+}
+
+enum DisbursementStatus {
+  PENDING
+  APPROVED
+  SENT
+  CONFIRMED
+  FAILED
+  REFUNDED
+}
+
+enum LedgerEntryType {
+  DONATION_RECEIVED
+  DISBURSEMENT_SENT
+  REFUND
+  ADJUSTMENT
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
-  id                        String      @id @default(uuid())
-  cognitoId                 String      @unique
-  email                     String      @unique
-  name                      String
-  avatarUrl                 String?
-  bio                       String?
-  role                      UserRole    @default(DONOR)
-  kycStatus                 KycStatus   @default(NOT_STARTED)
-  stripeCustomerId          String?     @unique
-  stripeAccountId           String?     @unique  // Stripe Connect Express account
-  stripeIdentitySessionId   String?
-  createdAt                 DateTime    @default(now())
-  updatedAt                 DateTime    @updatedAt
+  id                      String    @id @default(uuid())
+  cognitoId               String    @unique
+  email                   String    @unique
+  name                    String
+  avatarUrl               String?
+  bio                     String?
+  role                    UserRole  @default(DONOR)
+  kycStatus               KycStatus @default(NOT_STARTED)
+  stripeCustomerId        String?   @unique
+  stripeAccountId         String?   @unique // Stripe Connect Express account
+  stripeIdentitySessionId String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  organizationMemberships   OrgMember[]
-  campaigns                 Campaign[]
-  donations                 Donation[]
+  organizationMemberships OrgMember[]
+  campaigns               Campaign[]
+  donations               Donation[]
 
   @@index([email])
   @@index([cognitoId])
 }
 
 model Organization {
-  id          String      @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
-  slug        String      @unique
+  slug        String   @unique
   description String?
   logoUrl     String?
   websiteUrl  String?
-  ein         String?     // IRS Employer Identification Number
-  isVerified  Boolean     @default(false)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  ein         String? // IRS Employer Identification Number
+  isVerified  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  members     OrgMember[]
-  campaigns   Campaign[]
+  members   OrgMember[]
+  campaigns Campaign[]
 
   @@index([slug])
 }
@@ -114,8 +153,8 @@ model OrgMember {
   role           OrgMemberRole @default(MEMBER)
   createdAt      DateTime      @default(now())
 
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
   @@index([organizationId])
@@ -125,13 +164,16 @@ model Campaign {
   id                String           @id @default(uuid())
   slug              String           @unique
   title             String
-  description       String           // short teaser (max 500 chars)
-  story             String           @db.Text  // full rich-text story
+  description       String // short teaser (max 500 chars)
+  story             String           @db.Text // full rich-text story
   category          CampaignCategory
   status            CampaignStatus   @default(DRAFT)
-  goalAmountCents   Int              // e.g. 500000 = $5,000.00
+  goalAmountCents   Int // e.g. 500000 = $5,000.00
   raisedAmountCents Int              @default(0)
   donorCount        Int              @default(0)
+  disbursementMode  DisbursementMode @default(ORGANIZER_PAYOUT)
+  // Funds collected but not yet disbursed (DIRECT_TO_INSTITUTION only).
+  heldAmountCents   Int              @default(0)
   coverImageUrl     String?
   videoUrl          String?
   location          String?
@@ -142,11 +184,14 @@ model Campaign {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  organizer         User             @relation(fields: [organizerId], references: [id])
-  organization      Organization?    @relation(fields: [organizationId], references: [id])
-  donations         Donation[]
-  milestones        Milestone[]
-  updates           CampaignUpdate[]
+  organizer     User             @relation(fields: [organizerId], references: [id])
+  organization  Organization?    @relation(fields: [organizationId], references: [id])
+  donations     Donation[]
+  milestones    Milestone[]
+  updates       CampaignUpdate[]
+  campaignPayee CampaignPayee?
+  disbursements Disbursement[]
+  ledgerEntries LedgerEntry[]
 
   @@index([status, createdAt(sort: Desc)])
   @@index([organizerId])
@@ -165,7 +210,7 @@ model Milestone {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  campaign          Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
 }
@@ -177,7 +222,7 @@ model CampaignUpdate {
   body       String   @db.Text
   createdAt  DateTime @default(now())
 
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId, createdAt(sort: Desc)])
 }
@@ -186,9 +231,9 @@ model Donation {
   id                    String         @id @default(uuid())
   campaignId            String
   donorId               String
-  amountCents           Int            // gross donation
+  amountCents           Int // gross donation
   feeCents              Int            @default(0) // platform fee
-  netAmountCents        Int            // amountCents - feeCents (what organizer receives)
+  netAmountCents        Int // amountCents - feeCents (what organizer receives)
   status                DonationStatus @default(PENDING)
   stripePaymentIntentId String?        @unique
   stripeChargeId        String?        @unique
@@ -197,10 +242,89 @@ model Donation {
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 
-  campaign              Campaign       @relation(fields: [campaignId], references: [id])
-  donor                 User           @relation(fields: [donorId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  donor    User     @relation(fields: [donorId], references: [id])
 
   @@index([campaignId, status])
   @@index([donorId, createdAt(sort: Desc)])
   @@index([stripePaymentIntentId])
+}
+
+// A verified institution that receives funds directly (school bursar,
+// medical provider, funeral home). Never a personal account.
+model Payee {
+  id              String      @id @default(uuid())
+  type            PayeeType
+  name            String
+  ein             String?
+  // Sensitive payment instructions. Stored encrypted/tokenized at the
+  // application layer — never raw bank numbers in plaintext.
+  payInstructions Json
+  status          PayeeStatus @default(UNVERIFIED)
+  verifiedAt      DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  campaignPayees CampaignPayee[]
+  disbursements  Disbursement[]
+
+  @@index([type, status])
+}
+
+// Links one campaign to its verified payee (one payee per campaign for
+// the MLW). beneficiaryRef = the student/account id the institution
+// needs to apply the funds correctly.
+model CampaignPayee {
+  id             String   @id @default(uuid())
+  campaignId     String   @unique
+  payeeId        String
+  beneficiaryRef String?
+  createdAt      DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  payee    Payee    @relation(fields: [payeeId], references: [id])
+
+  @@index([payeeId])
+}
+
+// A single payout of held funds to a Payee. v1: operator-driven state
+// machine (PENDING->APPROVED->SENT->CONFIRMED). v2 swaps the executor
+// for automated ACH without schema changes.
+model Disbursement {
+  id            String             @id @default(uuid())
+  campaignId    String
+  payeeId       String
+  amountCents   Int
+  status        DisbursementStatus @default(PENDING)
+  method        String? // "ACH" | "CHECK" | "stripe_payout"
+  externalRef   String? // ACH trace / check # / payout id
+  proofUrl      String? // receipt in the receipts S3 bucket
+  initiatedById String? // operator (v1) / system (v2)
+  sentAt        DateTime?
+  confirmedAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+  payee    Payee    @relation(fields: [payeeId], references: [id])
+
+  @@index([campaignId, status])
+  @@index([payeeId])
+}
+
+// Append-only, publicly readable money trail per campaign.
+// amountCents is signed: positive = in, negative = out.
+model LedgerEntry {
+  id             String          @id @default(uuid())
+  campaignId     String
+  type           LedgerEntryType
+  amountCents    Int
+  donationId     String?
+  disbursementId String?
+  proofUrl       String?
+  occurredAt     DateTime        @default(now())
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, occurredAt])
 }
