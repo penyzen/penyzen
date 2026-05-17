@@ -33,12 +33,11 @@ export class AuthStack extends cdk.Stack {
         tempPasswordValidity: cdk.Duration.days(3),
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
-      email: cognito.UserPoolEmail.withSES({
-        sesRegion: 'us-east-1',
-        fromEmail: 'noreply@penyzen.com',
-        fromName: 'Penyzen',
-        replyTo: 'support@penyzen.com',
-      }),
+      // Dev uses Cognito's built-in email sender (no SES setup, ~50/day,
+      // works immediately). Production must switch back to SES with a
+      // verified penyzen.com domain identity out of the SES sandbox
+      // (see deployment-log-2026-05-13.md §7 — Option B / pre-prod gate).
+      email: cognito.UserPoolEmail.withCognito('support@penyzen.com'),
       userVerification: {
         emailSubject: 'Verify your Penyzen account',
         emailBody: 'Your verification code is {####}. It expires in 24 hours.',

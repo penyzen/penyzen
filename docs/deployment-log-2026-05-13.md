@@ -295,7 +295,10 @@ curl.exe -sS -i https://mb9z793u94.execute-api.us-east-1.amazonaws.com/v1/campai
 
 - **Frontend:** No web app exists yet. Decision pending: build Next.js in `apps/web/`, deploy to `dev.penyzen.com` via Amplify, swap with the static placeholder later.
 - **Stripe:** Placeholder keys only. When integrating real payments, update the Secrets Manager values and configure the three webhook endpoints (payment + connect + identity).
-- **SES:** Domain identity not yet verified for `penyzen.com`. Notification Lambda will deploy but fail to send until verified. If still in SES sandbox, only verified test recipients can receive mail.
+- **SES (PRE-PRODUCTION GATE):** Domain identity not yet verified for `penyzen.com`, and SES is in sandbox. Impact + status:
+  - **Cognito auth emails (signup confirmation codes):** *RESOLVED for dev (2026-05-17).* `auth-stack.ts` was switched from `UserPoolEmail.withSES(...)` to `UserPoolEmail.withCognito('support@penyzen.com')` (Option A). Cognito's built-in sender (`no-reply@verificationemail.com`, ~50/day) now delivers codes to any external address. Verified live: `EmailSendingAccount=COGNITO_DEFAULT`. **Before production, revert `auth-stack.ts` to `withSES` (Option B).**
+  - **Notification-service transactional emails:** still blocked — will deploy but fail to send until SES is verified + out of sandbox.
+  - **Option B (required before prod launch):** verify the `penyzen.com` domain identity in SES, request SES production access (~24h AWS approval), then point both Cognito (`auth-stack.ts` → `withSES`) and notification-service at the verified identity.
 - **Migrations:** The current migrator runs a single bundled SQL file. For ongoing schema changes, either (a) regenerate `initial-schema.sql` via `prisma migrate diff` and re-invoke, or (b) switch to bundling the full `prisma/migrations/` directory and shelling out to `prisma migrate deploy`.
 - **Static-site teardown:** `penyzen.com` and `www.penyzen.com` S3 buckets (us-east-2) still host the Nov-2024 landing page. Keep until the new frontend is live, then retire.
 
