@@ -227,6 +227,19 @@ export class ApiStack extends cdk.Stack {
 
     const noAuth = { authorizer: new apigatewayv2.HttpNoneAuthorizer() };
 
+    // Authed catch-all routes must NOT include OPTIONS. An `ANY {proxy+}`
+    // route swallows the browser's CORS preflight and runs it through the
+    // JWT authorizer; preflights carry no Authorization header, so they
+    // get 401 and the real request is blocked. Listing explicit methods
+    // (no OPTIONS) lets API Gateway's automatic CORS answer preflight.
+    const proxyMethods = [
+      apigatewayv2.HttpMethod.GET,
+      apigatewayv2.HttpMethod.POST,
+      apigatewayv2.HttpMethod.PUT,
+      apigatewayv2.HttpMethod.PATCH,
+      apigatewayv2.HttpMethod.DELETE,
+    ];
+
     // Auth routes (public)
     this.api.addRoutes({ path: '/v1/auth/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: userIntegration, ...noAuth });
 
@@ -237,14 +250,14 @@ export class ApiStack extends cdk.Stack {
     this.api.addRoutes({ path: '/v1/users/me/campaigns', methods: [apigatewayv2.HttpMethod.GET], integration: campaignIntegration });
 
     // User routes
-    this.api.addRoutes({ path: '/v1/users/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: userIntegration });
+    this.api.addRoutes({ path: '/v1/users/{proxy+}', methods: proxyMethods, integration: userIntegration });
 
     // Organization routes
-    this.api.addRoutes({ path: '/v1/organizations/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: userIntegration });
+    this.api.addRoutes({ path: '/v1/organizations/{proxy+}', methods: proxyMethods, integration: userIntegration });
     this.api.addRoutes({ path: '/v1/organizations', methods: [apigatewayv2.HttpMethod.POST], integration: userIntegration });
 
     // KYC routes
-    this.api.addRoutes({ path: '/v1/kyc/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: userIntegration });
+    this.api.addRoutes({ path: '/v1/kyc/{proxy+}', methods: proxyMethods, integration: userIntegration });
 
     // Campaign routes (public GET)
     this.api.addRoutes({ path: '/v1/campaigns', methods: [apigatewayv2.HttpMethod.GET], integration: campaignIntegration, ...noAuth });
@@ -256,12 +269,12 @@ export class ApiStack extends cdk.Stack {
     // Campaign routes (authenticated)
     this.api.addRoutes({ path: '/v1/campaigns', methods: [apigatewayv2.HttpMethod.POST], integration: campaignIntegration });
     this.api.addRoutes({ path: '/v1/campaigns/{campaignId}', methods: [apigatewayv2.HttpMethod.PATCH, apigatewayv2.HttpMethod.DELETE], integration: campaignIntegration });
-    this.api.addRoutes({ path: '/v1/campaigns/{campaignId}/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: campaignIntegration });
+    this.api.addRoutes({ path: '/v1/campaigns/{campaignId}/{proxy+}', methods: proxyMethods, integration: campaignIntegration });
 
     // Payment routes
     this.api.addRoutes({ path: '/v1/donations', methods: [apigatewayv2.HttpMethod.POST, apigatewayv2.HttpMethod.GET], integration: paymentIntegration });
     this.api.addRoutes({ path: '/v1/donations/{donationId}', methods: [apigatewayv2.HttpMethod.GET], integration: paymentIntegration });
-    this.api.addRoutes({ path: '/v1/connect/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: paymentIntegration });
+    this.api.addRoutes({ path: '/v1/connect/{proxy+}', methods: proxyMethods, integration: paymentIntegration });
 
     // Stripe webhook (public — verified by Stripe signature internally)
     this.api.addRoutes({ path: '/v1/webhooks/{proxy+}', methods: [apigatewayv2.HttpMethod.POST], integration: paymentIntegration, ...noAuth });
