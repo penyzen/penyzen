@@ -199,7 +199,12 @@ export class ApiStack extends cdk.Stack {
       apiName: `penyzen-api-${props.envName}`,
       description: 'Penyzen Crowdfunding Platform API',
       corsPreflight: {
-        allowOrigins: ['https://www.penyzen.com', 'http://localhost:3000'],
+        allowOrigins: [
+          'https://www.penyzen.com',
+          'https://dev.penyzen.com',
+          'https://d36f230uhjp2x3.amplifyapp.com', // Amplify default domain (fallback)
+          'http://localhost:3000',
+        ],
         allowMethods: [
           apigatewayv2.CorsHttpMethod.GET,
           apigatewayv2.CorsHttpMethod.POST,

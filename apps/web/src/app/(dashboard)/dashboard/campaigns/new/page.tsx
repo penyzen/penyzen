@@ -19,6 +19,7 @@ const CATEGORIES: { value: CampaignCategory; label: string }[] = [
 export default function NewCampaignPage() {
   const router = useRouter();
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [story, setStory] = useState('');
   const [category, setCategory] = useState<CampaignCategory>('COMMUNITY');
   const [goalDollars, setGoalDollars] = useState('1000');
@@ -30,9 +31,21 @@ export default function NewCampaignPage() {
     e.preventDefault();
     setError(null);
 
-    const goalCents = Math.round(Number(goalDollars) * 100);
-    if (!Number.isFinite(goalCents) || goalCents < 10000) {
+    const goalAmountCents = Math.round(Number(goalDollars) * 100);
+    if (!Number.isFinite(goalAmountCents) || goalAmountCents < 10000) {
       setError('Goal must be at least $100.');
+      return;
+    }
+    if (title.trim().length < 10) {
+      setError('Title must be at least 10 characters.');
+      return;
+    }
+    if (description.trim().length < 20) {
+      setError('Summary must be at least 20 characters.');
+      return;
+    }
+    if (story.trim().length < 100) {
+      setError('Story must be at least 100 characters.');
       return;
     }
 
@@ -42,10 +55,12 @@ export default function NewCampaignPage() {
         method: 'POST',
         body: {
           title,
+          description,
           story,
           category,
-          goalCents,
-          endsAt: endsAt || undefined,
+          goalAmountCents,
+          // Backend expects an ISO-8601 datetime; the date input is YYYY-MM-DD.
+          endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
         },
       });
       router.push(`/campaigns/${created.id}`);
@@ -68,7 +83,22 @@ export default function NewCampaignPage() {
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 max-w-2xl space-y-5">
-        <Field label="Campaign title" value={title} onChange={setTitle} required maxLength={120} />
+        <Field label="Campaign title" value={title} onChange={setTitle} required minLength={10} maxLength={120} />
+
+        <label className="block">
+          <span className="text-sm font-medium text-slate-700">Short summary</span>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+            rows={3}
+            minLength={20}
+            maxLength={500}
+            className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            placeholder="A one or two sentence teaser shown on campaign cards."
+          />
+          <span className="mt-1 block text-xs text-slate-500">{description.length} / 20–500 characters</span>
+        </label>
 
         <label className="block">
           <span className="text-sm font-medium text-slate-700">Story</span>
@@ -152,6 +182,7 @@ function Field({
   value,
   onChange,
   required,
+  minLength,
   maxLength,
 }: {
   label: string;
@@ -159,6 +190,7 @@ function Field({
   value: string;
   onChange: (v: string) => void;
   required?: boolean;
+  minLength?: number;
   maxLength?: number;
 }) {
   return (
@@ -169,6 +201,7 @@ function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}
+        minLength={minLength}
         maxLength={maxLength}
         className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
       />
