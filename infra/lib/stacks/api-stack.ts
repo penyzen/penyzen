@@ -230,6 +230,12 @@ export class ApiStack extends cdk.Stack {
     // Auth routes (public)
     this.api.addRoutes({ path: '/v1/auth/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: userIntegration, ...noAuth });
 
+    // listMyCampaigns is handled by campaign-service but sits under the
+    // /v1/users namespace. This explicit route must win over the
+    // /v1/users/{proxy+} -> user-service catch-all below (HTTP APIs route
+    // by most-specific match, so the literal path takes precedence).
+    this.api.addRoutes({ path: '/v1/users/me/campaigns', methods: [apigatewayv2.HttpMethod.GET], integration: campaignIntegration });
+
     // User routes
     this.api.addRoutes({ path: '/v1/users/{proxy+}', methods: [apigatewayv2.HttpMethod.ANY], integration: userIntegration });
 
