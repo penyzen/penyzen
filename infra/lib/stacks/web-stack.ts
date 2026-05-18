@@ -19,6 +19,8 @@ export interface WebStackProps extends cdk.StackProps {
   cognitoUserPoolId: string;
   cognitoAppClientId: string;
   cognitoRegion: string;
+  /** Stripe publishable key (pk_test_/pk_live_ — non-secret, client-side). Pass via CDK context: `cdk deploy -c stripe_pk=pk_test_...`. */
+  stripePublishableKey?: string;
 
   /** Optional: github repo URL like 'https://github.com/<user>/<repo>'. If omitted, the app is created without a source connection — connect it in the Amplify Console after deploy. */
   repositoryUrl?: string;
@@ -88,6 +90,7 @@ export class WebStack extends cdk.Stack {
         { name: 'NEXT_PUBLIC_COGNITO_USER_POOL_ID', value: props.cognitoUserPoolId },
         { name: 'NEXT_PUBLIC_COGNITO_APP_CLIENT_ID', value: props.cognitoAppClientId },
         { name: 'NEXT_PUBLIC_COGNITO_REGION', value: props.cognitoRegion },
+        { name: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', value: props.stripePublishableKey ?? '' },
         { name: 'NEXT_PUBLIC_APP_NAME', value: 'Penyzen' },
         { name: 'AMPLIFY_MONOREPO_APP_ROOT', value: 'apps/web' },
         // Required for SSR Next.js builds on Amplify

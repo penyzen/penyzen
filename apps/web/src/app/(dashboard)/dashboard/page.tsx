@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, Megaphone, User } from 'lucide-react';
 import { getServerUser } from '@/lib/auth-server';
+import { PayoutConnectCard } from '@/components/dashboard/payout-connect-card';
 
 export const metadata = { title: 'Dashboard' };
 
@@ -29,6 +30,10 @@ export default async function DashboardOverview() {
           title="Complete your profile"
           description="Add your bio and contact details."
         />
+      </div>
+
+      <div className="mt-4">
+        <PayoutConnectCard />
       </div>
     </>
   );

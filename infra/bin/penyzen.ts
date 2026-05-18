@@ -110,6 +110,7 @@ new MigratorStack(app, `PenyzenMigrator-${envName}`, {
 //   cdk deploy PenyzenWeb-dev -c github_repo=https://github.com/<user>/<repo> -c github_token=ghp_xxx
 const githubRepo = app.node.tryGetContext('github_repo') as string | undefined;
 const githubToken = app.node.tryGetContext('github_token') as string | undefined;
+const stripePk = app.node.tryGetContext('stripe_pk') as string | undefined;
 
 new WebStack(app, `PenyzenWeb-${envName}`, {
   envName: envName as 'dev' | 'prod',
@@ -125,6 +126,7 @@ new WebStack(app, `PenyzenWeb-${envName}`, {
   cognitoRegion: awsEnv.region!,
   ...(githubRepo && { repositoryUrl: githubRepo }),
   ...(githubToken && { githubAccessToken: githubToken }),
+  ...(stripePk && { stripePublishableKey: stripePk }),
   sourceBranch: envName === 'prod' ? 'master' : 'master',
   tags: { Project: 'penyzen', Environment: envName },
 });

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { Calendar, Users } from 'lucide-react';
 import type { CampaignSummary } from '@/lib/types';
 import { formatCents } from '@/lib/utils';
+import { DonatePanel } from '@/components/donate/donate-panel';
 
 async function getCampaign(id: string): Promise<CampaignSummary | null> {
   // NEXT_PUBLIC_* is the only env that is inlined at build and therefore
@@ -86,16 +87,7 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
               )}
             </dl>
 
-            <button
-              disabled
-              className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-md bg-brand-600 text-sm font-medium text-white opacity-60"
-              title="Donations coming soon"
-            >
-              Donate (coming soon)
-            </button>
-            <p className="mt-2 text-center text-xs text-slate-500">
-              Stripe integration not yet configured for this environment.
-            </p>
+            <DonatePanel campaignId={campaign.id} />
           </div>
         </aside>
       </div>
