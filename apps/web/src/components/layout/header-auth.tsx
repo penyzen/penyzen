@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getCurrentUser } from 'aws-amplify/auth';
+import { Hub } from 'aws-amplify/utils';
 import { SignOutButton } from '@/components/auth/sign-out-button';
 
 type AuthState =
@@ -15,17 +16,36 @@ export function HeaderAuth() {
 
   useEffect(() => {
     let active = true;
-    getCurrentUser()
-      .then((u) => {
-        if (active) {
-          setState({ status: 'in', label: u.signInDetails?.loginId ?? u.username });
-        }
-      })
-      .catch(() => {
-        if (active) setState({ status: 'out' });
-      });
+
+    const check = () => {
+      getCurrentUser()
+        .then((u) => {
+          if (active) {
+            setState({ status: 'in', label: u.signInDetails?.loginId ?? u.username });
+          }
+        })
+        .catch(() => {
+          if (active) setState({ status: 'out' });
+        });
+    };
+
+    check();
+
+    // Re-check on auth changes so the header reflects sign-in/sign-out
+    // without a full reload (the header is in the persistent root layout).
+    const unsubscribe = Hub.listen('auth', ({ payload }) => {
+      if (
+        payload.event === 'signedIn' ||
+        payload.event === 'signedOut' ||
+        payload.event === 'tokenRefresh'
+      ) {
+        check();
+      }
+    });
+
     return () => {
       active = false;
+      unsubscribe();
     };
   }, []);
 

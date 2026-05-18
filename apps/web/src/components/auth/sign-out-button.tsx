@@ -1,21 +1,23 @@
 'use client';
 
 import { signOut } from 'aws-amplify/auth';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 export function SignOutButton() {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   async function onClick() {
     setBusy(true);
     try {
       await signOut();
-      router.push('/');
-      router.refresh();
+    } catch {
+      // Even if the global sign-out network call fails, local tokens are
+      // cleared — fall through to a hard reload so the app re-initialises.
     } finally {
-      setBusy(false);
+      // The header lives in the persistent root layout, so a client-side
+      // router.push() would NOT re-run its auth check. A full navigation
+      // guarantees the whole app re-reads auth state.
+      window.location.assign('/');
     }
   }
 
