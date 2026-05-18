@@ -5,7 +5,9 @@ import type { CampaignSummary } from '@/lib/types';
 import { formatCents } from '@/lib/utils';
 
 async function getCampaign(id: string): Promise<CampaignSummary | null> {
-  const res = await fetch(`${process.env['PENYZEN_API_URL']}/v1/campaigns/${id}`, {
+  // NEXT_PUBLIC_* is the only env that is inlined at build and therefore
+  // available in the Amplify SSR runtime (plain Amplify env vars are not).
+  const res = await fetch(`${process.env['NEXT_PUBLIC_API_URL']}/v1/campaigns/${id}`, {
     next: { revalidate: 30 },
   });
   if (res.status === 404) return null;
@@ -27,8 +29,8 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
   const campaign = await getCampaign(params.id);
   if (!campaign) notFound();
 
-  const pct = campaign.goalCents > 0
-    ? Math.min(100, (campaign.raisedCents / campaign.goalCents) * 100)
+  const pct = campaign.goalAmountCents > 0
+    ? Math.min(100, (campaign.raisedAmountCents / campaign.goalAmountCents) * 100)
     : 0;
 
   return (
@@ -58,9 +60,9 @@ export default async function CampaignDetailPage({ params }: { params: { id: str
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
           <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-3xl font-bold text-slate-900">{formatCents(campaign.raisedCents)}</p>
+            <p className="text-3xl font-bold text-slate-900">{formatCents(campaign.raisedAmountCents)}</p>
             <p className="mt-1 text-sm text-slate-600">
-              raised of {formatCents(campaign.goalCents)} goal
+              raised of {formatCents(campaign.goalAmountCents)} goal
             </p>
 
             <div className="mt-4 h-2 w-full rounded-full bg-slate-100">

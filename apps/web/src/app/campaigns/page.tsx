@@ -4,7 +4,9 @@ import { formatCents } from '@/lib/utils';
 
 // Server-side fetch — no JWT needed; this endpoint is public.
 async function getCampaigns(): Promise<PaginatedResponse<CampaignSummary>> {
-  const res = await fetch(`${process.env['PENYZEN_API_URL']}/v1/campaigns`, {
+  // NEXT_PUBLIC_* is the only env that is inlined at build and therefore
+  // available in the Amplify SSR runtime (plain Amplify env vars are not).
+  const res = await fetch(`${process.env['NEXT_PUBLIC_API_URL']}/v1/campaigns`, {
     next: { revalidate: 60 },
   });
   if (!res.ok) throw new Error(`Failed to fetch campaigns: ${res.status}`);
@@ -59,7 +61,7 @@ export default async function CampaignsPage() {
 }
 
 function CampaignCard({ campaign }: { campaign: CampaignSummary }) {
-  const pct = campaign.goalCents > 0 ? Math.min(100, (campaign.raisedCents / campaign.goalCents) * 100) : 0;
+  const pct = campaign.goalAmountCents > 0 ? Math.min(100, (campaign.raisedAmountCents / campaign.goalAmountCents) * 100) : 0;
 
   return (
     <Link
@@ -88,8 +90,8 @@ function CampaignCard({ campaign }: { campaign: CampaignSummary }) {
             <div className="h-2 rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
           </div>
           <div className="mt-2 flex items-baseline justify-between text-sm">
-            <span className="font-semibold text-slate-900">{formatCents(campaign.raisedCents)}</span>
-            <span className="text-slate-600">of {formatCents(campaign.goalCents)}</span>
+            <span className="font-semibold text-slate-900">{formatCents(campaign.raisedAmountCents)}</span>
+            <span className="text-slate-600">of {formatCents(campaign.goalAmountCents)}</span>
           </div>
         </div>
       </div>

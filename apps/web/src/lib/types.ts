@@ -18,8 +18,8 @@ export interface CampaignSummary {
   story: string;
   category: CampaignCategory;
   status: CampaignStatus;
-  goalCents: number;
-  raisedCents: number;
+  goalAmountCents: number;
+  raisedAmountCents: number;
   donorCount: number;
   coverImageUrl: string | null;
   endsAt: string | null;
