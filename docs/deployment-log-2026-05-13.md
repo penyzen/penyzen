@@ -564,5 +564,64 @@ Full chain proven: browser → CloudFront → Amplify → Next.js SSR → Cognit
 
 - **CloudFormation drift on `PenyzenWeb-dev`**: branch + subdomain mapping recreated out-of-band. Run `aws cloudformation detect-stack-drift --stack-name penyzen-web-dev` to confirm, and decide whether to re-import or accept drift.
 - **GitHub PAT lifecycle**: token is stored on the Amplify app config (encrypted). Revoke/rotate when no longer needed.
-- **Stripe**: still placeholder. When integrating real payments, update Secrets Manager + configure the three webhook endpoints.
-- **SES**: domain identity not yet verified — notification Lambda will deploy but emails will fail to send.
+- **Stripe**: ~~still placeholder~~ **real test keys wired into dev (2026-05-17)** — see §11 for the rotation runbook. Still pending: production (live) keys + the Stripe Identity webhook for KYC if Verified-Organizer is exercised.
+- **SES**: domain identity not yet verified — notification Lambda will deploy but emails will fail to send (see §7 for the pre-prod gate).
+
+---
+
+## 11. Runbook: rotating the Stripe / DB secret
+
+**Why this is non-obvious:** `api-stack.ts` injects `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, `STRIPE_IDENTITY_WEBHOOK_SECRET` (and the
+DB-derived `DATABASE_URL`) into the Lambda environment via
+`props.dbSecret.secretValueFromJson('...').unsafeUnwrap()`. These render
+as CloudFormation Secrets Manager **dynamic references resolved at deploy
+time**. Updating the secret value alone produces **no template diff**, so
+`cdk deploy` reports "no changes" and the running Lambdas keep the
+*previously baked-in* values. This bit us on 2026-05-17 (Stripe key
+showed `PLACEHOLDER` in the Lambda env even though the secret was
+correctly updated).
+
+**The fix / procedure (every time you rotate any value in the shared
+Aurora secret):**
+
+1. Confirm the exact secret ARN (don't trust a stale copy):
+   ```powershell
+   aws lambda get-function-configuration --function-name penyzen-payment-service-dev `
+     --region us-east-1 --query 'Environment.Variables.DB_SECRET_ARN' --output text
+   ```
+2. **Merge** the new value(s) into the secret — never overwrite (the same
+   secret holds the DB `username`/`password`/`host`). Use the
+   read → `Add-Member -Force` → `ConvertTo-Json -Compress` →
+   `Out-File -Encoding ascii -NoNewline` → `put-secret-value` pattern
+   from §6 (ASCII + no BOM is mandatory).
+3. **Bump `secretRev`** in `infra/lib/stacks/api-stack.ts` (a single
+   `const secretRev = 'N'` wired into the user-service and
+   payment-service Lambda env as `SECRET_REV`). Incrementing it forces a
+   real template diff so CloudFormation re-resolves the dynamic
+   references. History: `'2'` = first Stripe test-key rotation
+   (2026-05-17).
+4. Redeploy: `npx cdk deploy PenyzenApi-dev --require-approval never`.
+   Expect `UPDATE_COMPLETE` on `PaymentServiceFunction` and
+   `UserServiceFunction`.
+5. Verify the Lambda env (not the secret) holds the new value, without
+   printing the secret:
+   ```powershell
+   $c = aws lambda get-function-configuration --function-name penyzen-payment-service-dev `
+     --region us-east-1 --query 'Environment.Variables' --output json | ConvertFrom-Json
+   if ($c.STRIPE_SECRET_KEY -like 'sk_test_placeholder*') { 'STILL PLACEHOLDER' }
+   elseif ($c.STRIPE_SECRET_KEY -like 'sk_*') { "OK (SECRET_REV=$($c.SECRET_REV))" }
+   ```
+
+**Long-term fix (not yet done):** read the secret at Lambda runtime (AWS
+Secrets Manager Lambda extension / SDK at cold start) instead of baking
+it into env at deploy time — then rotation needs no redeploy at all. The
+`secretRev` bump is the interim mechanism.
+
+---
+
+## Change log
+- **2026-05-13/14**: Initial backend + frontend deployment (§0–§10).
+- **2026-05-17**: §7 SES pre-prod gate detailed (Cognito switched to
+  default sender for dev); §11 added (Stripe test keys wired into dev +
+  the `secretRev` rotation runbook).

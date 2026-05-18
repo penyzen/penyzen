@@ -66,6 +66,13 @@ export class ApiStack extends cdk.Stack {
       CLOUDFRONT_DOMAIN: props.cloudfrontDomain,
     };
 
+    // Stripe keys are baked into Lambda env via Secrets Manager dynamic
+    // references resolved at deploy time. A pure secret-value rotation
+    // produces no template diff, so CloudFormation won't re-resolve them.
+    // Bump this string after every Secrets Manager rotation to force the
+    // Stripe Lambdas to redeploy and pick up the new values.
+    const secretRev = '2';
+
     // ── Lambda Functions ───────────────────────────────────────────────────
 
     const userServiceLambda = new PenyzenLambda(this, 'UserService', {
@@ -81,6 +88,7 @@ export class ApiStack extends cdk.Stack {
         // Lambda extension for true secret rotation without redeployment
         STRIPE_SECRET_KEY: props.dbSecret.secretValueFromJson('STRIPE_SECRET_KEY').unsafeUnwrap(),
         STRIPE_IDENTITY_WEBHOOK_SECRET: props.dbSecret.secretValueFromJson('STRIPE_IDENTITY_WEBHOOK_SECRET').unsafeUnwrap(),
+        SECRET_REV: secretRev,
       },
     });
 
@@ -108,6 +116,7 @@ export class ApiStack extends cdk.Stack {
         STRIPE_CONNECT_REDIRECT_URL: `https://www.penyzen.com/dashboard/connect`,
         API_URL: `https://api.penyzen.com`,
         PLATFORM_FEE_PERCENT: '2.5',
+        SECRET_REV: secretRev,
       },
     });
 
