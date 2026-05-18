@@ -1,6 +1,6 @@
 'use client';
 
-import { confirmSignUp, resendSignUpCode } from 'aws-amplify/auth';
+import { autoSignIn, confirmSignUp, resendSignUpCode } from 'aws-amplify/auth';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent } from 'react';
 
@@ -18,7 +18,19 @@ function ConfirmForm() {
     setError(null);
     setSubmitting(true);
     try {
-      await confirmSignUp({ username: email, confirmationCode: code });
+      const res = await confirmSignUp({ username: email, confirmationCode: code });
+      // Registration enabled autoSignIn, so complete it and go straight to
+      // the dashboard instead of bouncing to /login (which would then throw
+      // "There is already a signed in user").
+      if (res.nextStep?.signUpStep === 'COMPLETE_AUTO_SIGN_IN') {
+        try {
+          await autoSignIn();
+          router.push('/dashboard');
+          return;
+        } catch {
+          // Auto sign-in failed for some reason — fall back to manual login.
+        }
+      }
       router.push('/login');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Confirmation failed');

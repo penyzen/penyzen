@@ -1,9 +1,9 @@
 'use client';
 
-import { signIn } from 'aws-amplify/auth';
+import { getCurrentUser, signIn } from 'aws-amplify/auth';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,6 +11,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // If a session already exists (e.g. autoSignIn after registration, or a
+  // persisted cookie session), don't show the form — go to the dashboard.
+  useEffect(() => {
+    let active = true;
+    getCurrentUser()
+      .then(() => { if (active) router.replace('/dashboard'); })
+      .catch(() => { /* not signed in — show the form */ });
+    return () => { active = false; };
+  }, [router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -26,6 +36,11 @@ export default function LoginPage() {
         setError(`Additional step required: ${result.nextStep.signInStep}`);
       }
     } catch (err) {
+      // Already authenticated — they ARE signed in, so just proceed.
+      if (err instanceof Error && err.name === 'UserAlreadyAuthenticatedException') {
+        router.push('/dashboard');
+        return;
+      }
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
       setSubmitting(false);

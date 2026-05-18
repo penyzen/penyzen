@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { HeaderAuth } from './header-auth';
 
 export function Header() {
   return (
@@ -17,20 +18,7 @@ export function Header() {
           </Link>
         </nav>
 
-        <div className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="text-sm font-medium text-slate-700 hover:text-slate-900"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/register"
-            className="inline-flex h-9 items-center rounded-md bg-brand-600 px-4 text-sm font-medium text-white hover:bg-brand-700"
-          >
-            Get started
-          </Link>
-        </div>
+        <HeaderAuth />
       </div>
     </header>
   );
